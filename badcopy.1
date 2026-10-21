@@ -1,0 +1,129 @@
+.TH BADCOPY 1 "October 2026" "badcopy" "User Commands"
+.SH NAME
+badcopy \- copy files that reside (partly) on bad blocks
+.SH SYNOPSIS
+.B python badcopy.py
+(\fB\-R\fR | \fB\-C\fR)
+[\fB\-S\fR \fIsource\fR]
+\fB\-D\fR \fIdestination\fR
+[\fB\-P\fR \fIn\fR]
+[\fB\-O\fR]
+.br
+.B python badcopy.py
+\fB\-H\fR
+.SH DESCRIPTION
+.B badcopy
+copies files from damaged media.
+Readable parts are copied.
+Unreadable parts are retried and, if they still cannot be read, filled with zeros
+so that every offset in the copy matches the original and the copy has the same size.
+The source is only ever opened read-only; nothing is written to it.
+All output, including the log file, goes to the destination.
+.PP
+Blocks are read 1 MiB at a time.
+A block that fails is split in half repeatedly, down to 512-byte sectors,
+so that only the truly unreadable sectors are lost.
+Afterwards the remaining bad sectors are re-read for the requested number of
+retry passes, and any data recovered is patched into the copy.
+.PP
+A file that still has unreadable parts is saved as
+.IR name _bad. ext
+instead of
+.IR name . ext .
+Files without damage keep their name.
+.PP
+Switches are case-insensitive (\fB\-r\fR is the same as \fB\-R\fR) and each has a
+GNU-style long form.
+Option values must be given as a separate argument.
+.SH OPTIONS
+.TP
+.BR \-R ", " \-\-recursive
+Recurse into subfolders of the source.
+The folder tree is preserved below the destination.
+Exactly one of \fB\-R\fR and \fB\-C\fR is required.
+.TP
+.BR \-C ", " \-\-current
+Copy only the files in the source folder (no subfolders).
+.TP
+.BR \-S ", " \-\-source " \fIsource\fR"
+A file, a folder or a wildcard pattern such as
+.IR D:\photos\*.jpg .
+Wildcards (\fB*\fR, \fB?\fR, \fB[...]\fR) are allowed only in the file-name part.
+If omitted, all files (\fB*.*\fR) in the current folder are used.
+.TP
+.BR \-D ", " \-\-dest ", " \-\-destination " \fIfolder\fR"
+Destination folder; created if it does not exist. Required.
+If it lies inside the source tree it is excluded from a recursive copy.
+.TP
+.BR \-P ", " \-\-passes " \fIn\fR"
+Number of retry passes over sectors that could not be read.
+Default 3; 0 disables retrying.
+Retries often recover flaky sectors; dead sectors stay dead, so values above
+about 5 rarely help and each pass is slow on a failing drive.
+.TP
+.BR \-O ", " \-\-overwrite
+Overwrite files that already exist at the destination.
+By default such files (under either name, plain or with the \fB_bad\fR suffix)
+are skipped.
+.TP
+.BR \-H ", " \-\-help
+Show a short help text and exit.
+.SH OUTPUT
+After the files are tallied, a summary line
+.RI ( "Copying N file(s), X MB in total" )
+is printed.
+While a file is copied, a single progress line shows the file number, percentage
+and bytes done of the file size (in bytes, KB, MB or GB), plus the retry pass when
+retrying.
+The progress line is shown only when standard output is a terminal.
+Each file then gets a result line:
+.BR ok ,
+.BR BAD ,
+.BR skip
+or
+.BR FAILED .
+.SH FILES
+.TP
+.I destination/badcopy.log
+Appended to on every run.
+Lists each unreadable range as tab-separated
+.RB ( BAD ,
+source path, offset, length) and files that could not be opened
+.RB ( FAILED ).
+.TP
+.I *.badcopy.part
+Temporary name used while a file is being written; renamed when the file is
+complete and removed if the run is aborted.
+.SH EXIT STATUS
+.TP
+.B 0
+All files copied without bad areas.
+.TP
+.B 1
+Some files had unreadable areas or could not be copied.
+.TP
+.B 2
+Fatal error (for example the destination is full or cannot be created).
+.TP
+.B 130
+Interrupted (Ctrl+C).
+.SH EXAMPLES
+Copy a whole tree, keeping the folder structure:
+.PP
+.RS
+python badcopy.py \-R \-S D:\photos \-D E:\rescue
+.RE
+.PP
+Copy only the JPEGs in one folder, with five retry passes:
+.PP
+.RS
+python badcopy.py \-C \-S "D:\photos\*.jpg" \-D E:\rescue \-P 5
+.RE
+.SH NOTES
+Requires Python 3.8 or newer and only the standard library.
+On heavily damaged disks a sector-level imaging tool such as GNU ddrescue is
+a better first step than file-level copying.
+.SH SEE ALSO
+.BR cp (1),
+.BR dd (1),
+.BR ddrescue (1)
